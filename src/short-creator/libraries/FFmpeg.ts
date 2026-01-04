@@ -12,13 +12,16 @@ export class FFMpeg {
   }
 
   async saveNormalizedAudio(
-    audio: ArrayBuffer,
+    audio: Readable | ArrayBuffer,
     outputPath: string,
   ): Promise<string> {
     logger.debug("Normalizing audio for Whisper");
-    const inputStream = new Readable();
-    inputStream.push(Buffer.from(audio));
-    inputStream.push(null);
+    
+    const inputStream = audio instanceof Readable ? audio : new Readable();
+    if (!(audio instanceof Readable)) {
+      inputStream.push(Buffer.from(audio as ArrayBuffer));
+      inputStream.push(null);
+    }
 
     return new Promise((resolve, reject) => {
       ffmpeg()
@@ -36,6 +39,39 @@ export class FFMpeg {
           reject(error);
         })
         .save(outputPath);
+    });
+  }
+
+  async getDurationInSeconds(filePath: string): Promise<number> {
+    return new Promise((resolve, reject) => {
+      ffmpeg.ffprobe(filePath, (err, metadata) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve(metadata.format.duration || 0);
+      });
+    });
+  }
+
+  async convertWavToMp3(
+    wavFilePath: string,
+    mp3FilePath: string,
+  ): Promise<string> {
+    return new Promise((resolve, reject) => {
+      ffmpeg(wavFilePath)
+        .audioCodec("libmp3lame")
+        .audioBitrate(128)
+        .audioChannels(2)
+        .toFormat("mp3")
+        .save(mp3FilePath)
+        .on("end", () => {
+          logger.debug("WAV to MP3 conversion complete");
+          resolve(mp3FilePath);
+        })
+        .on("error", (err) => {
+          reject(err);
+        });
     });
   }
 

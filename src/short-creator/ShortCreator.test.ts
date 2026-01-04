@@ -47,10 +47,16 @@ vi.mock("fs-extra", async () => {
         }
       } catch (error) {}
     }),
-    createWriteStream: vi.fn(() => ({
-      on: vi.fn(),
+    createWriteStream: vi.fn((path) => ({
+      on: vi.fn((event, cb) => {
+        if (event === "finish") {
+          cb();
+        }
+      }),
       write: vi.fn(),
       end: vi.fn(),
+      close: vi.fn(),
+      pipe: vi.fn(),
     })),
     readFileSync: vi.fn((path) => {
       return memfs.readFileSync(path);
@@ -62,41 +68,100 @@ vi.mock("fs-extra", async () => {
   };
 });
 
+vi.mock("https", () => ({
+  default: {
+    get: vi.fn((url, callback) => {
+      const response = {
+        statusCode: 200,
+        pipe: vi.fn(),
+      };
+      callback(response);
+      return {
+        on: vi.fn(),
+      };
+    }),
+  },
+}));
+
+vi.mock("http", () => ({
+  default: {
+    get: vi.fn((url, callback) => {
+      const response = {
+        statusCode: 200,
+        pipe: vi.fn(),
+      };
+      callback(response);
+      return {
+        on: vi.fn(),
+      };
+    }),
+  },
+}));
+
 // Mock fluent-ffmpeg
 vi.mock("fluent-ffmpeg", () => {
-  const mockOn = vi.fn().mockReturnThis();
-  const mockSave = vi.fn().mockReturnThis();
-  const mockPipe = vi.fn().mockReturnThis();
-
-  const ffmpegMock = vi.fn(() => ({
+  const ffmpegMockInstance = {
     input: vi.fn().mockReturnThis(),
     audioCodec: vi.fn().mockReturnThis(),
     audioBitrate: vi.fn().mockReturnThis(),
     audioChannels: vi.fn().mockReturnThis(),
     audioFrequency: vi.fn().mockReturnThis(),
     toFormat: vi.fn().mockReturnThis(),
-    on: mockOn,
-    save: mockSave,
-    pipe: mockPipe,
-  }));
+    on: vi.fn(function (event, callback) {
+      if (event === "end") {
+        callback();
+      }
+      return this;
+    }),
+    save: vi.fn(function (filepath) {
+      const onEndCallback = this.on.mock.calls.find(
+        (call) => call[0] === "end",
+      )?.[1];
+      if (onEndCallback) {
+        onEndCallback();
+      }
+      return this;
+    }),
+    pipe: vi.fn().mockReturnThis(),
+  };
 
+  const ffmpegMock = vi.fn(() => ffmpegMockInstance);
   ffmpegMock.setFfmpegPath = vi.fn();
+  ffmpegMock.ffprobe = vi.fn((path, callback) => {
+    callback(null, { format: { duration: 5 } });
+  });
 
   return { default: ffmpegMock };
 });
 
 // mock kokoro-js
 vi.mock("kokoro-js", () => {
+  const mockStream = async function* () {
+    const wavBuffer = new ArrayBuffer(44);
+    const view = new DataView(wavBuffer);
+    view.setUint32(40, 0, true); // a dummy value for the data size
+
+    yield {
+      audio: {
+        toWav: vi.fn().mockReturnValue(wavBuffer),
+        audio: new ArrayBuffer(8),
+        sampling_rate: 44100,
+      },
+    };
+  };
+
+  const mockKokoroTTS = {
+    stream: vi.fn().mockReturnValue(mockStream()),
+  };
+
   return {
     KokoroTTS: {
-      from_pretrained: vi.fn().mockResolvedValue({
-        generate: vi.fn().mockResolvedValue({
-          toWav: vi.fn().mockReturnValue(new ArrayBuffer(8)),
-          audio: new ArrayBuffer(8),
-          sampling_rate: 44100,
-        }),
-      }),
+      from_pretrained: vi.fn().mockResolvedValue(mockKokoroTTS),
     },
+    TextSplitterStream: vi.fn(() => ({
+      push: vi.fn(),
+      close: vi.fn(),
+    })),
   };
 });
 

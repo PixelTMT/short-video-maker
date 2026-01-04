@@ -33,12 +33,13 @@ import {
 interface SceneFormData {
   text: string;
   searchTerms: string; // Changed to string
+  audioUrl?: string;
 }
 
 const VideoCreator: React.FC = () => {
   const navigate = useNavigate();
   const [scenes, setScenes] = useState<SceneFormData[]>([
-    { text: "", searchTerms: "" },
+    { text: "", searchTerms: "", audioUrl: "" },
   ]);
   const [config, setConfig] = useState<RenderConfig>({
     paddingBack: 1500,
@@ -80,7 +81,7 @@ const VideoCreator: React.FC = () => {
   }, []);
 
   const handleAddScene = () => {
-    setScenes([...scenes, { text: "", searchTerms: "" }]);
+    setScenes([...scenes, { text: "", searchTerms: "", audioUrl: "" }]);
   };
 
   const handleRemoveScene = (index: number) => {
@@ -114,6 +115,7 @@ const VideoCreator: React.FC = () => {
       // Convert scenes to the expected API format
       const apiScenes: SceneInput[] = scenes.map((scene) => ({
         text: scene.text,
+        audioUrl: scene.audioUrl,
         searchTerms: scene.searchTerms
           .split(",")
           .map((term) => term.trim())
@@ -196,6 +198,18 @@ const VideoCreator: React.FC = () => {
                     handleSceneChange(index, "text", e.target.value)
                   }
                   required
+                />
+              </Grid>
+
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  label="Audio URL"
+                  value={scene.audioUrl}
+                  onChange={(e) =>
+                    handleSceneChange(index, "audioUrl", e.target.value)
+                  }
+                  helperText="Enter an audio URL to use instead of TTS"
                 />
               </Grid>
 

@@ -32,6 +32,10 @@ export type Scene = {
 
 export const sceneInput = z.object({
   text: z.string().describe("Text to be spoken in the video"),
+  audioUrl: z
+    .string()
+    .optional()
+    .describe("Audio URL to be used instead of TTS"),
   searchTerms: z
     .array(z.string())
     .describe(
